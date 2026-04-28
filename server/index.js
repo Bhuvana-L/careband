@@ -105,7 +105,13 @@ io.on('connection', (socket) => {
 });
 
 // MongoDB
-mongoose.connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 10000, family: 4 })
+const mongoUri = process.env.MONGO_URI;
+if (!mongoUri) {
+  console.error('❌ MONGO_URI not set! Add it to environment variables.');
+  console.error('   On Render: Dashboard → Your Service → Environment → Add MONGO_URI');
+}
+
+mongoose.connect(mongoUri || 'mongodb://localhost:27017/careband', { serverSelectionTimeoutMS: 10000, family: 4 })
   .then(() => { console.log('✅ MongoDB connected'); startServers(); })
   .catch(err => { console.error('❌ MongoDB error:', err.message); startServers(); });
 
