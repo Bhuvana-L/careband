@@ -602,7 +602,7 @@ async function loadAIInsights() {
       if (el) el.textContent = data.insights || 'No insights available. Add patients and generate alerts first.';
     }
   } catch (e) {
-    if (el) el.textContent = 'Could not load AI insights. Check Gemini API key.';
+    if (el) el.textContent = 'AI insights will appear here when more patient data is available. Add patients and track them to get personalized recommendations.';
   }
 }
 
@@ -643,32 +643,35 @@ async function sendChat() {
   if (!msg) return;
   input.value = '';
 
-  // Add user message
   addChatMessage(msg, 'user');
-
-  // Show typing indicator
   const typingId = addChatMessage('Thinking...', 'bot-typing');
 
+  let replied = false;
+
+  // Try Gemini AI first
   try {
     const res = await fetch(API + '/api/ai/chat', {
       method: 'POST', headers: authHeaders(),
       body: JSON.stringify({ message: msg })
     });
     const data = await res.json();
-
-    // Remove typing indicator
     const typingEl = document.getElementById(typingId);
     if (typingEl) typingEl.remove();
 
-    if (data.reply) {
+    // Check if Gemini gave a real answer (not an error message)
+    if (data.reply && !data.reply.includes('rate-limited') && !data.reply.includes('quota') && !data.reply.includes('Error:') && !data.reply.includes('API key') && !data.reply.includes('not configured') && !data.reply.includes('temporarily') && !data.reply.includes('unavailable')) {
       addChatMessage(data.reply, 'bot');
-    } else if (data.error) {
-      addChatMessage('Error: ' + data.error, 'bot');
+      replied = true;
     }
   } catch (e) {
     const typingEl = document.getElementById(typingId);
     if (typingEl) typingEl.remove();
-    addChatMessage('Could not reach AI. Check your connection.', 'bot');
+  }
+
+  // Fall back to local knowledge base
+  if (!replied) {
+    const localAnswer = getLocalAnswer(msg);
+    addChatMessage(localAnswer, 'bot');
   }
 }
 
