@@ -578,3 +578,44 @@ function addAlertToFullPage(a) {
   div.innerHTML = '<span class="alert-icon">'+(icons[a.type]||'🔔')+'</span><div class="alert-body"><div class="alert-text">'+esc(a.message)+'</div><div class="alert-time">'+(a.time?timeAgo(new Date(a.time)):'now')+'</div></div><button class="resolve-btn" onclick="resolveAlert(this)">Resolve</button>';
   feed.prepend(div);
 }
+
+// ============ GOOGLE GEMINI AI ============
+async function loadAIInsights() {
+  const el = document.getElementById('aiInsightsText');
+  if (el) el.innerHTML = '<span style="color:var(--accent)">🤖 Asking Gemini AI...</span>';
+  try {
+    const res = await fetch(API + '/api/ai/insights', { headers: authHeaders() });
+    const data = await res.json();
+    if (data.summary) {
+      let html = '<strong>' + esc(data.summary) + '</strong>';
+      if (data.concerns && data.concerns.length > 0) {
+        html += '<br><br>⚠️ <strong>Concerns:</strong><br>' + data.concerns.map(c => '• ' + esc(c)).join('<br>');
+      }
+      if (data.recommendations && data.recommendations.length > 0) {
+        html += '<br><br>💡 <strong>Recommendations:</strong><br>' + data.recommendations.map(r => '• ' + esc(r)).join('<br>');
+      }
+      if (data.wellnessTip) {
+        html += '<br><br>💙 ' + esc(data.wellnessTip);
+      }
+      if (el) el.innerHTML = html;
+    } else {
+      if (el) el.textContent = data.insights || 'No insights available. Add patients and generate alerts first.';
+    }
+  } catch (e) {
+    if (el) el.textContent = 'Could not load AI insights. Check Gemini API key.';
+  }
+}
+
+async function analyzeAlertWithAI(alertData) {
+  try {
+    const res = await fetch(API + '/api/ai/analyze-alert', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(alertData)
+    });
+    const analysis = await res.json();
+    if (analysis.recommendation) {
+      showToast('safe', '🤖 AI: ' + (analysis.risk || '').toUpperCase(), analysis.recommendation);
+    }
+    return analysis;
+  } catch (e) { return null; }
+}

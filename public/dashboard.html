@@ -268,9 +268,9 @@
       <div class="card">
         <div class="card-title">Daily Routine <span class="badge">Today</span> <button class="resolve-btn" onclick="openModal('addRoutineModal')" style="font-size:12px;padding:5px 12px;">+ Add</button></div>
         <div class="routine-list" id="routineList"></div>
-        <div class="stress-card">
-          <div class="stress-title">💙 Caregiver Wellness</div>
-          <div class="stress-msg">You've been active for 6 hours. Remember to take breaks. Your wellbeing matters too.</div>
+        <div class="stress-card" id="aiInsightsCard">
+          <div class="stress-title">🤖 Gemini AI Insights <button onclick="loadAIInsights()" style="background:none;border:1px solid rgba(59,130,246,0.3);color:var(--accent2);padding:3px 10px;border-radius:6px;font-size:11px;cursor:pointer;margin-left:8px;">Refresh</button></div>
+          <div class="stress-msg" id="aiInsightsText">Click Refresh to get AI-powered care recommendations from Google Gemini.</div>
         </div>
       </div>
     </div>

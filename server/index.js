@@ -45,6 +45,11 @@ const patientRoutes = require('./routes/patients');
 const locationRoutes = require('./routes/locations');
 const alertRoutes = require('./routes/alerts');
 const sosRoutes = require('./routes/sos');
+const aiRoutes = require('./routes/ai');
+const { initGemini } = require('./services/gemini');
+
+// Initialize Gemini AI
+initGemini();
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -71,6 +76,7 @@ app.use('/api/patients', patientRoutes);
 app.use('/api/locations', locationRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api/sos', sosRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Pages
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
