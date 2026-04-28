@@ -66,4 +66,43 @@ Respond ONLY with valid JSON:
   }
 }
 
-module.exports = { initGemini, analyzeAlert, getCaregiverInsights };
+async function chatWithGemini(userMessage, context) {
+  if (!model) return 'AI chatbot is not configured. Please add GEMINI_API_KEY to environment variables.';
+
+  const systemPrompt = `You are CareBand AI, a friendly and knowledgeable assistant for the CareBand dementia care system. You know EVERYTHING about this system and the caregiver's data.
+
+SYSTEM INFORMATION:
+${JSON.stringify(context.systemInfo, null, 2)}
+
+CURRENT CAREGIVER:
+Name: ${context.caregiver.name}, Email: ${context.caregiver.email}, Role: ${context.caregiver.role}
+
+PATIENTS (${context.patients.length} total):
+${context.patients.length > 0 ? context.patients.map(p => `- ${p.name}, Age ${p.age}, ${p.condition}, Phone: ${p.phone}, Status: ${p.status}, Safe Zone: ${p.safeZoneRadius}m`).join('\n') : 'No patients added yet.'}
+
+PATIENT LOCATIONS:
+${context.patientLocations.length > 0 ? context.patientLocations.map(l => `- ${l.patientName}: ${l.lat.toFixed(4)}, ${l.lng.toFixed(4)} (${l.time})`).join('\n') : 'No location data yet.'}
+
+RECENT ALERTS (${context.recentAlerts.length}):
+${context.recentAlerts.length > 0 ? context.recentAlerts.map(a => `- [${a.severity}] ${a.type}: ${a.message} (${a.time})`).join('\n') : 'No alerts yet.'}
+
+RULES:
+- Be helpful, warm, and concise
+- Answer questions about patients, alerts, features, how things work
+- Give care advice when asked
+- If asked about a specific patient, use the real data above
+- If asked how to do something in CareBand, explain the steps
+- Keep responses under 150 words
+- Use emojis sparingly for friendliness
+- If you don't know something specific, say so honestly`;
+
+  try {
+    const result = await model.generateContent(systemPrompt + '\n\nUser: ' + userMessage);
+    return result.response.text().trim();
+  } catch (err) {
+    console.error('Gemini chat error:', err.message);
+    return 'Sorry, I had trouble processing that. Please try again.';
+  }
+}
+
+module.exports = { initGemini, analyzeAlert, getCaregiverInsights, chatWithGemini };

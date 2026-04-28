@@ -619,3 +619,81 @@ async function analyzeAlertWithAI(alertData) {
     return analysis;
   } catch (e) { return null; }
 }
+
+// ============ GEMINI AI CHATBOT ============
+let chatbotOpen = false;
+
+function toggleChatbot() {
+  chatbotOpen = !chatbotOpen;
+  const panel = document.getElementById('chatbotPanel');
+  const toggle = document.getElementById('chatbotToggle');
+  if (chatbotOpen) {
+    panel.style.display = 'flex';
+    toggle.style.transform = 'rotate(360deg)';
+    document.getElementById('chatInput').focus();
+  } else {
+    panel.style.display = 'none';
+    toggle.style.transform = 'rotate(0deg)';
+  }
+}
+
+async function sendChat() {
+  const input = document.getElementById('chatInput');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+
+  // Add user message
+  addChatMessage(msg, 'user');
+
+  // Show typing indicator
+  const typingId = addChatMessage('Thinking...', 'bot-typing');
+
+  try {
+    const res = await fetch(API + '/api/ai/chat', {
+      method: 'POST', headers: authHeaders(),
+      body: JSON.stringify({ message: msg })
+    });
+    const data = await res.json();
+
+    // Remove typing indicator
+    const typingEl = document.getElementById(typingId);
+    if (typingEl) typingEl.remove();
+
+    if (data.reply) {
+      addChatMessage(data.reply, 'bot');
+    } else if (data.error) {
+      addChatMessage('Error: ' + data.error, 'bot');
+    }
+  } catch (e) {
+    const typingEl = document.getElementById(typingId);
+    if (typingEl) typingEl.remove();
+    addChatMessage('Could not reach AI. Check your connection.', 'bot');
+  }
+}
+
+function addChatMessage(text, type) {
+  const container = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  const id = 'chat-' + Date.now();
+  div.id = id;
+
+  if (type === 'user') {
+    div.style.cssText = 'background:rgba(0,212,170,0.15);border:1px solid rgba(0,212,170,0.25);border-radius:12px 12px 4px 12px;padding:10px 14px;font-size:13px;color:var(--text);max-width:85%;align-self:flex-end;';
+  } else if (type === 'bot-typing') {
+    div.style.cssText = 'background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);border-radius:12px 12px 12px 4px;padding:10px 14px;font-size:13px;color:var(--muted);max-width:85%;font-style:italic;';
+  } else {
+    div.style.cssText = 'background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);border-radius:12px 12px 12px 4px;padding:10px 14px;font-size:13px;color:var(--text);line-height:1.6;max-width:85%;';
+  }
+
+  // Convert markdown-like formatting
+  let formatted = esc(text)
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>');
+  div.innerHTML = formatted;
+
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return id;
+}
