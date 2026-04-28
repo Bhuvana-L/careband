@@ -1,107 +1,113 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 let model = null;
+let genAI = null;
 
 function initGemini() {
   if (!process.env.GEMINI_API_KEY) {
     console.log('⚠️  GEMINI_API_KEY not set — AI features disabled');
     return;
   }
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-  console.log('✅ Google Gemini AI ready');
+  try {
+    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    console.log('✅ Google Gemini AI ready');
+  } catch (err) {
+    console.error('Gemini init error:', err.message);
+    // Try older model name
+    try {
+      model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      console.log('✅ Google Gemini AI ready (1.5-flash)');
+    } catch (e) {
+      console.error('Gemini fallback error:', e.message);
+    }
+  }
 }
 
 async function analyzeAlert(alertData) {
-  if (!model) return { analysis: 'AI not configured', risk: 'unknown', recommendation: 'Set up Gemini API key for AI analysis' };
-
-  const prompt = `You are a dementia care AI assistant. Analyze this patient alert and provide a brief JSON response.
-
-Alert: ${JSON.stringify(alertData)}
-
-Respond ONLY with valid JSON in this format:
-{
-  "risk": "low|medium|high|critical",
-  "analysis": "Brief 1-2 sentence analysis of the situation",
-  "recommendation": "Brief actionable recommendation for the caregiver",
-  "urgency": "immediate|soon|routine"
-}`;
-
+  if (!model) return { analysis: 'AI not configured', risk: 'unknown', recommendation: 'Add GEMINI_API_KEY' };
   try {
+    const prompt = 'You are a dementia care AI. Analyze this alert briefly in JSON format {risk, analysis, recommendation}: ' + JSON.stringify(alertData);
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) return JSON.parse(jsonMatch[0]);
-    return { analysis: text, risk: 'unknown', recommendation: 'Check on patient' };
+    const m = text.match(/\{[\s\S]*\}/);
+    if (m) return JSON.parse(m[0]);
+    return { analysis: text, risk: 'unknown', recommendation: 'Check patient' };
   } catch (err) {
-    console.error('Gemini error:', err.message);
-    return { analysis: 'AI analysis unavailable', risk: 'unknown', recommendation: 'Manual review needed' };
+    console.error('Gemini analyzeAlert error:', err.message);
+    return { analysis: 'Error', risk: 'unknown', recommendation: err.message };
   }
 }
 
 async function getCaregiverInsights(patients, recentAlerts) {
-  if (!model) return { insights: 'Configure Gemini API for AI insights' };
-
-  const prompt = `You are a dementia care AI assistant. Based on the following patient data and recent alerts, provide brief caregiver insights.
-
-Patients: ${JSON.stringify(patients.map(p => ({ name: p.name, age: p.age, condition: p.condition, status: p.status })))}
-Recent Alerts (last 24h): ${JSON.stringify(recentAlerts.slice(0, 10).map(a => ({ type: a.type, message: a.message, severity: a.severity })))}
-
-Respond ONLY with valid JSON:
-{
-  "summary": "Brief overall status summary",
-  "concerns": ["List of concerns if any"],
-  "recommendations": ["List of 2-3 actionable recommendations"],
-  "wellnessTip": "A brief wellness tip for the caregiver"
-}`;
-
+  if (!model) return { insights: 'Add GEMINI_API_KEY for AI insights' };
   try {
+    const pList = (patients || []).map(p => (p.name || 'Unknown') + ' age ' + (p.age || '?')).join(', ');
+    const aList = (recentAlerts || []).slice(0, 5).map(a => (a.type || '') + ': ' + (a.message || '')).join('; ');
+    const prompt = 'You are a dementia care AI. Give brief caregiver insights as JSON {summary, concerns:[], recommendations:[], wellnessTip}. Patients: ' + (pList || 'none') + '. Recent alerts: ' + (aList || 'none');
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) return JSON.parse(jsonMatch[0]);
+    const m = text.match(/\{[\s\S]*\}/);
+    if (m) return JSON.parse(m[0]);
     return { summary: text };
   } catch (err) {
-    return { summary: 'AI insights unavailable', recommendations: ['Check on all patients regularly'] };
+    console.error('Gemini insights error:', err.message);
+    return { summary: 'Could not get insights: ' + err.message };
   }
 }
 
 async function chatWithGemini(userMessage, context) {
   if (!model) return 'AI chatbot is not configured. Please add GEMINI_API_KEY to environment variables.';
 
-  const systemPrompt = `You are CareBand AI, a friendly and knowledgeable assistant for the CareBand dementia care system. You know EVERYTHING about this system and the caregiver's data.
-
-SYSTEM INFORMATION:
-${JSON.stringify(context.systemInfo, null, 2)}
-
-CURRENT CAREGIVER:
-Name: ${context.caregiver.name}, Email: ${context.caregiver.email}, Role: ${context.caregiver.role}
-
-PATIENTS (${context.patients.length} total):
-${context.patients.length > 0 ? context.patients.map(p => `- ${p.name}, Age ${p.age}, ${p.condition}, Phone: ${p.phone}, Status: ${p.status}, Safe Zone: ${p.safeZoneRadius}m`).join('\n') : 'No patients added yet.'}
-
-PATIENT LOCATIONS:
-${context.patientLocations.length > 0 ? context.patientLocations.map(l => `- ${l.patientName}: ${l.lat.toFixed(4)}, ${l.lng.toFixed(4)} (${l.time})`).join('\n') : 'No location data yet.'}
-
-RECENT ALERTS (${context.recentAlerts.length}):
-${context.recentAlerts.length > 0 ? context.recentAlerts.map(a => `- [${a.severity}] ${a.type}: ${a.message} (${a.time})`).join('\n') : 'No alerts yet.'}
-
-RULES:
-- Be helpful, warm, and concise
-- Answer questions about patients, alerts, features, how things work
-- Give care advice when asked
-- If asked about a specific patient, use the real data above
-- If asked how to do something in CareBand, explain the steps
-- Keep responses under 150 words
-- Use emojis sparingly for friendliness
-- If you don't know something specific, say so honestly`;
-
   try {
-    const result = await model.generateContent(systemPrompt + '\n\nUser: ' + userMessage);
-    return result.response.text().trim();
+    // Build a safe, compact context string
+    const caregiver = context.caregiver || {};
+    const patients = context.patients || [];
+    const alerts = context.recentAlerts || [];
+    const locations = context.patientLocations || [];
+    const features = (context.systemInfo && context.systemInfo.features) || [];
+
+    let systemInfo = 'You are CareBand AI assistant for a dementia care system. Be helpful, warm, concise (under 150 words).\n\n';
+    systemInfo += 'CAREBAND FEATURES: ' + features.join(', ') + '\n\n';
+    systemInfo += 'CAREGIVER: ' + (caregiver.name || 'Unknown') + ' (' + (caregiver.email || '') + ')\n\n';
+
+    if (patients.length > 0) {
+      systemInfo += 'PATIENTS (' + patients.length + '):\n';
+      patients.forEach(p => {
+        systemInfo += '- ' + (p.name||'?') + ', Age ' + (p.age||'?') + ', ' + (p.condition||'Dementia') + ', Status: ' + (p.status||'unknown') + ', Phone: ' + (p.phone||'N/A') + '\n';
+      });
+    } else {
+      systemInfo += 'PATIENTS: None added yet\n';
+    }
+
+    if (locations.length > 0) {
+      systemInfo += '\nLOCATIONS:\n';
+      locations.forEach(l => {
+        const lat = typeof l.lat === 'number' ? l.lat.toFixed(4) : '?';
+        const lng = typeof l.lng === 'number' ? l.lng.toFixed(4) : '?';
+        systemInfo += '- ' + (l.patientName||'?') + ': ' + lat + ', ' + lng + '\n';
+      });
+    }
+
+    if (alerts.length > 0) {
+      systemInfo += '\nRECENT ALERTS:\n';
+      alerts.slice(0, 10).forEach(a => {
+        systemInfo += '- [' + (a.severity||'?') + '] ' + (a.type||'?') + ': ' + (a.message||'') + '\n';
+      });
+    }
+
+    const fullPrompt = systemInfo + '\nUser question: ' + userMessage;
+
+    const result = await model.generateContent(fullPrompt);
+    const reply = result.response.text().trim();
+    return reply || 'I could not generate a response. Please try again.';
   } catch (err) {
     console.error('Gemini chat error:', err.message);
-    return 'Sorry, I had trouble processing that. Please try again.';
+    // Return the actual error so we can debug
+    if (err.message.includes('API_KEY')) return 'API key issue: ' + err.message;
+    if (err.message.includes('quota')) return 'API quota exceeded. Please try again later.';
+    if (err.message.includes('not found')) return 'AI model not available. The API key may need the Gemini API enabled in Google Cloud Console.';
+    return 'Error: ' + err.message;
   }
 }
 
