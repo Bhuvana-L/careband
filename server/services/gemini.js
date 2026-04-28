@@ -10,14 +10,13 @@ function initGemini() {
   }
   try {
     genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-    console.log('✅ Google Gemini AI ready');
+    model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
+    console.log('✅ Google Gemini AI ready (2.0-flash-lite)');
   } catch (err) {
     console.error('Gemini init error:', err.message);
-    // Try older model name
     try {
-      model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-      console.log('✅ Google Gemini AI ready (1.5-flash)');
+      model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+      console.log('✅ Google Gemini AI ready (2.0-flash)');
     } catch (e) {
       console.error('Gemini fallback error:', e.message);
     }
@@ -105,9 +104,9 @@ async function chatWithGemini(userMessage, context) {
     console.error('Gemini chat error:', err.message);
     // Return the actual error so we can debug
     if (err.message.includes('API_KEY')) return 'API key issue: ' + err.message;
-    if (err.message.includes('quota')) return 'API quota exceeded. Please try again later.';
-    if (err.message.includes('not found')) return 'AI model not available. The API key may need the Gemini API enabled in Google Cloud Console.';
-    return 'Error: ' + err.message;
+    if (err.message.includes('quota') || err.message.includes('429')) return 'The AI is temporarily rate-limited (free tier quota). Please wait a minute and try again. The quota resets every minute (15 requests/min) and daily (1500/day).';
+    if (err.message.includes('not found')) return 'AI model not available. Try again in a moment.';
+    return 'AI temporarily unavailable: ' + err.message.substring(0, 100);
   }
 }
 
