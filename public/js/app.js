@@ -148,11 +148,6 @@ function updatePatientPosition(pid, lat, lng) {
       showToast('danger','Geofence!',p.name+' left zone ('+dist.toFixed(0)+'m)');
       triggerEmergencyFlash();
       addAlertToFeed({type:'GEOFENCE_EXIT',message:p.name+' left safe zone - '+dist.toFixed(0)+'m',severity:'HIGH',time:new Date()});
-      // Email all caregivers
-      fetch(API+'/api/sos/alert-all', {method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({subject:'GEOFENCE ALERT - '+p.name+' left safe zone!',
-          message:p.name+' has left the safe zone!<br>Distance: '+dist.toFixed(0)+'m from home.<br>Phone: '+(p.phone||'N/A')+'<br><a href="https://www.google.com/maps?q='+lat+','+lng+'">View on Google Maps</a>'})
-      }).catch(()=>{});
     } else if (dist <= (p.radius||100) && p._alerted) {
       p._alerted = false; p.status = 'safe';
       addAlertToFeed({type:'GEOFENCE_ENTER',message:p.name+' returned to safe zone',severity:'LOW',time:new Date()});
@@ -215,14 +210,6 @@ function triggerManualSOS() {
     if(d.success) showToast('safe','SOS Sent!','Email delivered to '+email);
     else showToast('danger','Send Failed',d.error||'Check email config');
   }).catch(e => showToast('danger','Send Failed',e.message));
-
-  // Also alert ALL registered caregivers
-  fetch(API+'/api/sos/alert-all', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({
-      subject: 'EMERGENCY SOS from '+((currentUser&&currentUser.name)||'Caregiver'),
-      message: 'Manual SOS triggered! All caregivers please check the dashboard immediately.'
-    })
-  }).catch(()=>{});
 }
 
 async function sendTrackingLink(patientId, patientEmail) {
@@ -457,12 +444,6 @@ function startVoiceDetection() {
     if(kw&&l.isFinal){
       showToast('danger','EMERGENCY!','"'+kw+'" detected'); triggerEmergencyFlash();
       addAlertToFeed({type:'VOICE_EMERGENCY',message:'Voice: "'+kw+'" detected — "'+t+'"',severity:'CRITICAL',time:new Date()});
-      // Send email alert to ALL caregivers via server
-      fetch(API+'/api/sos/voice-alert', {method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({keyword:kw, transcript:t, patientId:activePatientId||'unknown'})
-      }).then(r=>r.json()).then(d => {
-        if(d.sent>0) showToast('safe','Emails Sent','Alert emailed to '+d.sent+' caregiver(s)');
-      }).catch(()=>{});
     }
   };
   voiceRecognition.onerror = (e) => { if(e.error!=='no-speech') showToast('warn','Voice Error',e.error); };
