@@ -59,13 +59,18 @@ async function loadPatients() {
 function initSocketListeners() {
   try {
     if (typeof io !== 'undefined') {
-      const socket = io();
+      // Connect to same origin — works on both localhost and Render
+      const socket = io(window.location.origin, {
+        reconnectionAttempts: 3,
+        timeout: 5000,
+        transports: ['websocket', 'polling']
+      });
+      socket.on('connect', () => { console.log('Socket.io connected'); });
+      socket.on('connect_error', () => { /* silent fail */ });
       socket.on('location-updated', (data) => {
-        // Real GPS from patient's phone — update their marker on map
         const p = allPatients.find(x => x.id === data.patientId);
         if (p) {
           if (p.lat === 0 && p.lng === 0) {
-            // First location from this patient — add to map
             p.lat = data.lat; p.lng = data.lng;
             addPatientToMap(p);
             if (leafletMap) leafletMap.setView([data.lat, data.lng], 16);
@@ -79,9 +84,8 @@ function initSocketListeners() {
         triggerEmergencyFlash();
         addAlertToFeed({type:'GEOFENCE_EXIT', message:data.patientName+' left safe zone - '+data.distance+'m', severity:'HIGH', time:new Date()});
       });
-      console.log('Socket.io connected for real-time updates');
     }
-  } catch(e) { console.log('Socket.io not available'); }
+  } catch(e) { /* silent */ }
 }
 
 // ============ NAVIGATION ============
