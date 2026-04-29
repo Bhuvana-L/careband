@@ -1,32 +1,72 @@
 const nodemailer = require('nodemailer');
 const dns = require('dns');
+const net = require('net');
 
-// Force IPv4 — fixes ENETUNREACH on Render
-dns.setDefaultResultOrder('ipv4first');
+// Force IPv4
+try { dns.setDefaultResultOrder('ipv4first'); } catch(e) {}
 
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  },
-  tls: {
-    rejectUnauthorized: false
-  },
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 15000
-});
+let transporter = null;
 
-// Verify connection on startup
-transporter.verify((err) => {
-  if (err) console.error('Email setup error:', err.message);
-  else console.log('✅ Email service ready');
-});
+async function initMailer() {
+  // Try multiple Gmail configs until one works
+  const configs = [
+    // Config 1: Port 465 SSL (most reliable on cloud)
+    {
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+      tls: { rejectUnauthorized: false },
+      connectionTimeout: 10000
+    },
+    // Config 2: Port 587 STARTTLS
+    {
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+      tls: { rejectUnauthorized: false },
+      connectionTimeout: 10000
+    },
+    // Config 3: Direct IP (bypass DNS)
+    {
+      host: '142.250.4.108', // smtp.gmail.com IPv4
+      port: 465,
+      secure: true,
+      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+      tls: { rejectUnauthorized: false, servername: 'smtp.gmail.com' },
+      connectionTimeout: 10000
+    }
+  ];
+
+  for (let i = 0; i < configs.length; i++) {
+    try {
+      const t = nodemailer.createTransport(configs[i]);
+      await t.verify();
+      transporter = t;
+      console.log('✅ Email service ready (config ' + (i+1) + ')');
+      return;
+    } catch (err) {
+      console.log('Email config ' + (i+1) + ' failed:', err.message);
+    }
+  }
+  console.log('⚠️ Email service unavailable — all configs failed');
+}
+
+// Init on load
+if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+  initMailer();
+} else {
+  console.log('⚠️ EMAIL_USER/EMAIL_PASS not set');
+}
 
 async function sendAlertEmail(to, subject, message) {
+  if (!transporter) {
+    // Try to init again
+    await initMailer();
+    if (!transporter) return { success: false, error: 'Email service not available' };
+  }
+
   try {
     const html = `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#0a0e1a;color:#f1f5f9;padding:30px;border-radius:16px;">
