@@ -79,7 +79,7 @@
         return;
       }
 
-      setStatus('active', '📡', 'Acquiring GPS...', 'Please wait');
+      setStatus('active', '📡', 'Acquiring GPS...', 'Please allow location access when asked');
 
       watchId = navigator.geolocation.watchPosition(
         (pos) => {
@@ -92,10 +92,31 @@
           sendLocation(lastLat, lastLng, pos.coords.accuracy);
         },
         (err) => {
-          setStatus('error', '❌', 'GPS Error', err.message);
+          if (err.code === 1) {
+            // Permission denied
+            setStatus('error', '🔒', 'Location Permission Denied', '');
+            document.getElementById('statusSub').innerHTML =
+              '<strong>Please enable location:</strong><br><br>' +
+              '📱 <strong>Android:</strong><br>' +
+              '1. Open phone Settings<br>' +
+              '2. Tap Location → Turn ON<br>' +
+              '3. Go to browser Settings<br>' +
+              '4. Site Settings → Location → Allow<br>' +
+              '5. Come back and tap Start again<br><br>' +
+              '🍎 <strong>iPhone:</strong><br>' +
+              '1. Open Settings → Privacy → Location Services → ON<br>' +
+              '2. Scroll to your browser → set to "While Using"<br>' +
+              '3. Come back and tap Start again';
+          } else if (err.code === 2) {
+            setStatus('error', '📡', 'Location Unavailable', 'Turn on GPS/Location in your phone settings, then try again');
+          } else {
+            setStatus('error', '⏱️', 'Location Timeout', 'Move to an open area and try again');
+          }
           log('Error: ' + err.message);
+          document.getElementById('startBtn').style.display = 'block';
+          document.getElementById('stopBtn').style.display = 'none';
         },
-        { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
+        { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
       );
 
       document.getElementById('startBtn').style.display = 'none';
